@@ -1,0 +1,25 @@
+{
+  "name": "dentistory",
+  "version": "0.1.0",
+  "description": "Assistant IA pour dentistes : dictée → compte-rendu, actes CCAM et devis",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nathadorf/dentistory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nathadorf/dentistory/issues"
+  },
+  "homepage": "https://github.com/nathadorf/dentistory#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "zod": "^4.6.7"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}

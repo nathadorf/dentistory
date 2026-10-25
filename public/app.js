@@ -14,6 +14,12 @@
   const COURONNES_HORS_100 = ['HBLD491', 'HBLD734', 'HBLD073', 'HBLD158', 'HBLD403'];
   const HISTORY_KEY = 'dentistory.historique';
   const HISTORY_MAX = 30;
+  const DEVIS_STATUTS = { a_remettre: 'À remettre', remis: 'Remis au patient', accepte: 'Accepté', refuse: 'Refusé' };
+  // Schéma dentaire FDI, vu de face : arcade du haut 18 → 28, arcade du bas 48 → 38.
+  const ARCADES = [
+    [[18, 17, 16, 15, 14, 13, 12, 11], [21, 22, 23, 24, 25, 26, 27, 28]],
+    [[48, 47, 46, 45, 44, 43, 42, 41], [31, 32, 33, 34, 35, 36, 37, 38]],
+  ];
 
   let ccam = [];
   let ccamByCode = {};
@@ -139,6 +145,9 @@
       actes: (result.actes || []).map((a) => ({ ...a, honoraires: a.honoraires ?? defaultHonoraires(a.code) })),
       explication: result.explication || '',
       courrier: result.courrier || '',
+      ordonnance: result.ordonnance ?? result.compte_rendu?.prescriptions ?? '',
+      consentement: result.consentement || '',
+      devisStatut: result.devisStatut || 'a_remettre',
     };
     display();
   }
@@ -155,6 +164,10 @@
     $('#explain-box').hidden = !state.explication;
     $('#courrier').value = state.courrier;
     $('#courrier').hidden = $('#courrier-actions').hidden = !state.courrier;
+    $('#ordonnance').value = state.ordonnance ?? state.compte_rendu.prescriptions ?? '';
+    $('#consentement').value = state.consentement || '';
+    $('#consentement').hidden = $('#consentement-actions').hidden = !state.consentement;
+    $('#devis-statut').value = state.devisStatut || 'a_remettre';
     showTab('cr');
   }
 
@@ -313,6 +326,31 @@
         <td><button class="del" type="button" title="Supprimer" data-del="${i}">✕</button></td>
       </tr>`;
     }).join('');
+    renderOdonto();
+  }
+
+  function renderOdonto() {
+    const statut = {};
+    for (const a of state.actes) {
+      const d = String(a.dent).trim();
+      if (a.statut === 'propose') statut[d] = 'p';
+      else if (!statut[d]) statut[d] = 'r';
+    }
+    const dent = (n) => `<button type="button" data-dent="${n}" class="${statut[n] || ''}" title="Dent ${n}">${n}</button>`;
+    $('#odonto').innerHTML = ARCADES.map(([g, d], i) =>
+      `<div class="arcade ${i ? 'lower' : 'upper'}">${g.map(dent).join('')}<span class="mid"></span>${d.map(dent).join('')}</div>`).join('');
+  }
+
+  function ajouterActe(dent) {
+    // Restauration 1 face par défaut, secteur selon la dent ; le praticien choisit ensuite le bon code.
+    const pos = Number(String(dent).slice(-1));
+    const code = pos >= 1 && pos <= 3 ? 'HBMD058' : 'HBMD053';
+    state.actes.push({ dent: String(dent), code, libelle: ccamByCode[code]?.libelle || '', statut: 'propose', honoraires: defaultHonoraires(code) });
+    renderActes();
+    renderAlertes();
+    saveSession();
+    const rows = $('#actes-body').querySelectorAll('tr');
+    rows[rows.length - 1]?.querySelector('select.code')?.focus();
   }
 
   function renderDevis() { $('#devis-preview').innerHTML = devisHTML(); }
@@ -323,6 +361,72 @@
   }
 
   const texteHTML = (titre, texte) => `<div class="doc">${headerDoc()}${titre ? `<h1>${esc(titre)}</h1>` : ''}<div class="text-doc">${esc(texte)}</div></div>`;
+
+  function ordonnanceHTML() {
+    const p = praticien();
+    const nom = $('#patient-nom').value.trim() || '—';
+    return `<div class="doc">
+      <div class="doc-head">
+        <div><strong>${esc(p.nom || 'Nom du praticien')}</strong><br>Chirurgien-dentiste<br>${esc(p.adresse || '')}${p.tel ? '<br>Tél. ' + esc(p.tel) : ''}<br>RPPS : ${esc(p.rpps || '—')} · N° AM : ${esc(p.am || '—')}</div>
+        <div>Le ${today()}<br><strong>Patient :</strong> ${esc(nom)}</div>
+      </div>
+      <h1>Ordonnance</h1>
+      <div class="text-doc">${esc($('#ordonnance').value)}</div>
+      <div class="sign"><div></div><div>Signature du praticien</div></div>
+    </div>`;
+  }
+
+  function consentementHTML() {
+    const nom = $('#patient-nom').value.trim();
+    return `<div class="doc">${headerDoc()}<h1>Consentement éclairé aux soins dentaires</h1>
+      ${nom ? `<p><strong>Patient :</strong> ${esc(nom)}</p>` : ''}
+      <div class="text-doc">${esc($('#consentement').value)}</div>
+      <div class="sign"><div>Signature du praticien</div><div>Date et signature du patient, précédées de « Lu et approuvé »</div></div></div>`;
+  }
+
+  // ---------- Suivi des devis ----------
+  function totalDevis(st) {
+    return (st?.actes || []).filter((a) => a.statut === 'propose').reduce((t, a) => t + (Number(a.honoraires) || 0), 0);
+  }
+
+  function renderSuivi() {
+    const list = storage.get(HISTORY_KEY, []).filter((e) => totalDevis(e.state) > 0);
+    const somme = (statut) => list.filter((e) => (e.state.devisStatut || 'a_remettre') === statut).reduce((t, e) => t + totalDevis(e.state), 0);
+    const nb = (statut) => list.filter((e) => (e.state.devisStatut || 'a_remettre') === statut).length;
+    const decides = nb('accepte') + nb('refuse');
+    $('#suivi-kpis').innerHTML = [
+      [String(list.length), 'devis'],
+      [eur(somme('remis') + somme('a_remettre')), 'en attente de réponse'],
+      [eur(somme('accepte')), 'acceptés'],
+      [decides ? Math.round((nb('accepte') / decides) * 100) + ' %' : '—', "taux d'acceptation"],
+    ].map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+    $('#suivi-table').innerHTML = list.length ? `<thead><tr><th>Date</th><th>Patient</th><th class="num">Montant</th><th>Statut</th><th></th></tr></thead><tbody>${list.map((e) => {
+      const st = e.state.devisStatut || 'a_remettre';
+      const enAttente = st === 'remis' || st === 'a_remettre';
+      return `<tr data-id="${e.id}">
+        <td>${new Date(e.date).toLocaleDateString('fr-FR')}</td>
+        <td>${esc(e.patient || 'Patient sans nom')}${e.demo ? ' · démo' : ''}<div class="libelle">${esc(e.state.compte_rendu?.motif || '')}</div></td>
+        <td class="num">${eur(totalDevis(e.state))}</td>
+        <td><select data-statut>${Object.entries(DEVIS_STATUTS).map(([k, l]) => `<option value="${k}" ${k === st ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+        <td>${enAttente ? `<button class="ghost" type="button" data-relance>Relancer</button>${e.relance ? `<div class="libelle">Relancé le ${new Date(e.relance).toLocaleDateString('fr-FR')}</div>` : ''}` : ''}</td>
+      </tr>`;
+    }).join('')}</tbody>` : '<tbody><tr><td class="hint">Aucun devis pour l\'instant. Les devis générés apparaissent ici.</td></tr></tbody>';
+  }
+
+  function updateEntry(id, fn) {
+    const list = storage.get(HISTORY_KEY, []);
+    const e = list.find((x) => x.id === id);
+    if (!e) return null;
+    fn(e);
+    storage.set(HISTORY_KEY, list);
+    return e;
+  }
+
+  function messageRelance(e) {
+    const p = praticien();
+    const date = new Date(e.date).toLocaleDateString('fr-FR');
+    return `Bonjour${e.patient ? ' ' + e.patient : ''},\n\nSuite à votre rendez-vous du ${date}, nous vous avons remis un devis pour votre plan de traitement (${eur(totalDevis(e.state))}). Avez-vous pu en prendre connaissance ? Nous restons à votre disposition pour répondre à vos questions ou planifier les soins.\n\nBien cordialement,\n${p.nom || 'Le cabinet'}${p.tel ? '\n' + p.tel : ''}`;
+  }
 
   function printDoc(html) {
     $('#print-area').innerHTML = html;
@@ -357,10 +461,13 @@
   // ---------- Historique (navigateur uniquement) ----------
   function saveSession() {
     if (!state || !currentId) return;
-    const list = storage.get(HISTORY_KEY, []).filter((e) => e.id !== currentId);
+    const all = storage.get(HISTORY_KEY, []);
+    const prev = all.find((e) => e.id === currentId) || {};
+    const list = all.filter((e) => e.id !== currentId);
     list.unshift({
+      ...prev, // garde les champs gérés ailleurs (date de relance)
       id: currentId,
-      date: new Date().toISOString(),
+      date: prev.date || new Date().toISOString(),
       patient: $('#patient-nom').value.trim(),
       ddn: $('#patient-ddn').value,
       dictee: $('#dictee').value,
@@ -407,6 +514,39 @@
     $('#consignes').addEventListener('input', (e) => { state.consignes_patient = e.target.value; saveSession(); });
     $('#explication').addEventListener('input', (e) => { state.explication = e.target.value; saveSession(); });
     $('#courrier').addEventListener('input', (e) => { state.courrier = e.target.value; saveSession(); });
+    $('#ordonnance').addEventListener('input', (e) => { state.ordonnance = e.target.value; saveSession(); });
+    $('#consentement').addEventListener('input', (e) => { state.consentement = e.target.value; saveSession(); });
+    $('#devis-statut').addEventListener('change', (e) => { state.devisStatut = e.target.value; saveSession(); });
+    $('#odonto').addEventListener('click', (e) => { if (e.target.dataset.dent) ajouterActe(e.target.dataset.dent); });
+
+    $('#btn-print-ordonnance').addEventListener('click', () => printDoc(ordonnanceHTML()));
+    $('#btn-consent').addEventListener('click', (e) => {
+      if (!devisLignes().length) return setStatus('Aucun acte proposé : le consentement porte sur les actes du devis.', true);
+      writeDocument('consentement', {}, e.target, (texte) => {
+        state.consentement = texte;
+        $('#consentement').value = texte;
+        $('#consentement').hidden = $('#consentement-actions').hidden = false;
+      });
+    });
+    $('#btn-copy-consentement').addEventListener('click', (e) => copy($('#consentement').value, e.target));
+    $('#btn-print-consentement').addEventListener('click', () => printDoc(consentementHTML()));
+
+    const suivi = $('#suivi');
+    $('#btn-suivi').addEventListener('click', () => { renderSuivi(); suivi.showModal(); });
+    $('#btn-suivi-close').addEventListener('click', () => suivi.close());
+    $('#suivi-table').addEventListener('change', (e) => {
+      const id = e.target.closest('tr')?.dataset.id;
+      if (!id || e.target.dataset.statut == null) return;
+      updateEntry(id, (x) => { x.state.devisStatut = e.target.value; });
+      if (id === currentId && state) { state.devisStatut = e.target.value; $('#devis-statut').value = e.target.value; }
+      renderSuivi();
+    });
+    $('#suivi-table').addEventListener('click', (e) => {
+      const id = e.target.closest('tr')?.dataset.id;
+      if (!id || e.target.dataset.relance == null) return;
+      const entry = updateEntry(id, (x) => { x.relance = new Date().toISOString(); });
+      if (entry) copy(messageRelance(entry), e.target).then(() => setTimeout(renderSuivi, 1600));
+    });
 
     $('#actes-body').addEventListener('change', (e) => {
       const tr = e.target.closest('tr');

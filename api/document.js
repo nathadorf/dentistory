@@ -10,6 +10,9 @@ Ton rassurant et neutre, sans pression commerciale. N'invente aucun fait cliniqu
   courrier: `Tu rédiges un courrier d'adressage d'un chirurgien-dentiste français à un confrère.
 Format lettre en texte brut : formule d'appel (« Cher confrère, » ou « Chère consœur, » si le destinataire l'indique, sinon « Cher(e) confrère, »), objet de l'adressage, présentation du patient, éléments cliniques et radiologiques utiles, ce qui a déjà été fait, la demande précise au confrère, formule de politesse confraternelle, puis le nom du praticien.
 Concis (200 à 300 mots), style médical. Numérotation dentaire FDI. N'invente aucun fait clinique absent des données. Pas de markdown.`,
+  consentement: `Tu rédiges un formulaire de consentement éclairé d'un cabinet dentaire français pour les actes proposés au patient (champ devis).
+Structure en texte brut, sections avec un titre en majuscules : NATURE DES SOINS PROPOSÉS (chaque acte avec la dent, en langage clair), BÉNÉFICES ATTENDUS, RISQUES ET EFFETS INDÉSIRABLES POSSIBLES (risques usuels et connus de ces actes, sans dramatiser), ALTERNATIVES (dont l'abstention et l'alternative 100 % Santé si elle figure dans les données), COÛT (renvoi au devis remis), puis un paragraphe de consentement à la première personne (« Je soussigné(e)... déclare avoir reçu une information claire... avoir pu poser mes questions... disposer d'un délai de réflexion... »).
+Vouvoiement dans les sections d'information. N'invente aucun fait clinique propre au patient. Pas de markdown.`,
 };
 
 export default async function handler(req, res) {

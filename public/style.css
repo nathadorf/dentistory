@@ -28,6 +28,9 @@ a.button:hover { background: var(--bg); }
 
 .banner { background: var(--warn-soft); color: var(--warn); padding: 8px 20px; font-size: .88rem; }
 .banner.info { background: var(--accent-soft); color: var(--accent); }
+.banner.demo { background: #fde8e7; color: var(--danger); }
+.banner code { font-size: .85em; }
+.demo-result { background: #fde8e7; color: var(--danger); border: 1px solid #f3b9b5; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: .9rem; }
 
 .layout { display: grid; grid-template-columns: minmax(320px, 5fr) 7fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; padding: 12px 16px; } }

@@ -37,7 +37,7 @@ npm install
 ANTHROPIC_API_KEY=sk-ant-... npm start   # http://localhost:3000
 ```
 
-Sans `ANTHROPIC_API_KEY`, l'app fonctionne en **mode démo** : « Générer » affiche un exemple pré-enregistré (bouton « Charger un exemple »).
+Sans `ANTHROPIC_API_KEY`, l'app fonctionne en **mode démo** : « Générer » affiche un exemple pré-enregistré (bouton « Charger un exemple »). Un bandeau rouge le signale dès l'ouverture, avec un diagnostic (environnement Vercel, variable absente, vide ou mal nommée).
 
 ## Déployer sur Vercel
 

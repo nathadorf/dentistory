@@ -36,6 +36,7 @@
   let state = null; // { compte_rendu, actes: [{dent, code, libelle, statut, honoraires}], consignes_patient, alertes, explication, courrier }
   let currentId = null;
   let demoMode = false;
+  let iaDisponible = true; // false quand le serveur n'a pas de clé API
   let suiteDe = null; // séance précédente du même patient, envoyée comme contexte à la génération
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -65,7 +66,8 @@
 
   function setDemo(on) {
     demoMode = on;
-    $('#demo-banner').hidden = !on;
+    $('#demo-banner').hidden = !on && iaDisponible;
+    $('#demo-result').hidden = !on;
   }
 
   // ---------- Dictée vocale (Web Speech API) ----------
@@ -813,7 +815,15 @@
 
   async function setupFeedback() {
     try {
-      const { feedbackEmail } = await (await fetch('/api/config')).json();
+      const { feedbackEmail, ia, environnement, variables_proches: proches } = await (await fetch('/api/config')).json();
+      if (ia === false) {
+        iaDisponible = false;
+        const diag = proches?.includes('ANTHROPIC_API_KEY') ? 'la variable ANTHROPIC_API_KEY existe mais sa valeur est vide'
+          : proches?.length ? `variables au nom proche : ${proches.join(', ')} (le nom doit être exactement ANTHROPIC_API_KEY)`
+          : 'aucune variable ANTHROPIC_API_KEY visible';
+        $('#demo-diag').textContent = ` Diagnostic : environnement « ${environnement} », ${diag}.`;
+        setDemo(demoMode);
+      }
       if (!feedbackEmail) return;
       const body = "Ce qui m'a fait gagner du temps :\n\n\nCe qui est faux ou manque :\n\n\nCe que je voudrais en plus :\n\n\nCombien je paierais par mois :\n";
       const a = $('#btn-feedback');

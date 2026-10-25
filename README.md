@@ -15,6 +15,10 @@ Assistant IA pour chirurgiens-dentistes : le praticien dicte sa séance, l'app r
 7. **Courrier d'adressage** à un confrère (chirurgien oral, parodontiste, orthodontiste...) rédigé depuis la séance.
 8. **Alertes** sur ce qu'il faut vérifier (code hors référentiel, honoraires libres non saisis, honoraires au-dessus du plafond, informations manquantes).
 9. **Historique** des 30 dernières séances, gardé dans le navigateur, pour rouvrir et reprendre une séance.
+10. **Schéma dentaire** cliquable dans l'onglet Actes : dents avec actes réalisés ou proposés en couleur, clic sur une dent pour lui ajouter un acte.
+11. **Ordonnance** imprimable, pré-remplie avec les prescriptions dictées (en-tête RPPS et n° AM).
+12. **Consentement éclairé** pré-rempli pour les actes du devis (nature, bénéfices, risques, alternatives), à faire signer.
+13. **Suivi des devis** : statut de chaque devis (à remettre, remis, accepté, refusé), montants en attente et acceptés, taux d'acceptation, message de relance patient copié en un clic.
 
 « Mon cabinet » règle les infos du praticien (nom, adresse, RPPS, n° AM) et ses **préférences de rédaction**, transmises à l'IA à chaque génération. Tout reste dans le navigateur.
 
@@ -42,7 +46,7 @@ Sans `ANTHROPIC_API_KEY`, l'app fonctionne en **mode démo** : « Générer » a
 | `public/index.html`, `app.js`, `style.css` | Interface, sans build |
 | `public/demo.js` | Cas fictif et résultat du mode démo |
 | `api/generate.js` | Appel à Claude (sortie structurée validée par zod) |
-| `api/document.js` | Explication du devis et courrier d'adressage |
+| `api/document.js` | Explication du devis, courrier d'adressage et consentement éclairé |
 | `api/config.js` | Réglages publics (e-mail de retour des testeurs) |
 | `api/ccam.js`, `api/_ccam.js` | Référentiel CCAM servi au front |
 | `server.js` | Serveur local équivalent à Vercel |

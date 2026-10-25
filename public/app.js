@@ -87,14 +87,16 @@
 
     const area = $('#dictee');
     let base = '';
+    const notifier = () => area.dispatchEvent(new Event('input'));
     recognition.onresult = (e) => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const text = e.results[i][0].transcript;
-        if (e.results[i].isFinal) base += (base && !base.endsWith(' ') ? ' ' : '') + text.trim();
+        if (e.results[i].isFinal) base = normaliserDictee(base + (base && !base.endsWith(' ') ? ' ' : '') + text.trim());
         else interim += text;
       }
       area.value = base + (interim ? ' ' + interim : '');
+      notifier();
     };
     recognition.onerror = (e) => {
       if (e.error === 'not-allowed') $('#mic-hint').textContent = "Accès au micro refusé. Autorisez-le dans le navigateur.";
@@ -115,6 +117,44 @@
         $('#mic-hint').textContent = '';
       }
     });
+  }
+
+  // ---------- Dictée : numéros de dents ----------
+  // Dents permanentes 11-48 et temporaires 51-85, en notation FDI.
+  const dentValide = (n) => { const q = Math.floor(n / 10), u = n % 10; return (q >= 1 && q <= 4 && u >= 1 && u <= 8) || (q >= 5 && q <= 8 && u >= 1 && u <= 5); };
+  const DIZAINES = { vingt: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60 };
+  const UNITES = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8 };
+  const ONZE_DIX_HUIT = { onze: 11, douze: 12, treize: 13, quatorze: 14, quinze: 15, seize: 16, 'dix-sept': 17, 'dix-huit': 18 };
+
+  // Corrige ce que la reconnaissance vocale écrit mal quand on dicte des dents.
+  function normaliserDictee(texte) {
+    return texte
+      // « vingt-six », « trente et un » → 26, 31
+      .replace(/\b(vingt|trente|quarante|cinquante|soixante)(?:-et-| et |[- ])(une?|deux|trois|quatre|cinq|six|sept|huit)\b/gi,
+        (m, d, u) => String(DIZAINES[d.toLowerCase()] + UNITES[u.toLowerCase()]))
+      // « seize », « dix-huit » après « dent », « la », « le »... → 16, 18
+      .replace(/\b(dents?|la|le|les|sur|et|de) (onze|douze|treize|quatorze|quinze|seize|dix-sept|dix-huit)\b/gi,
+        (m, avant, n) => `${avant} ${ONZE_DIX_HUIT[n.toLowerCase()]}`)
+      // « 20 6 », « 2-6 » ou « 2 6 » dicté chiffre par chiffre → 26
+      .replace(/\b([1-8])0 ([1-8])\b/g, '$1$2')
+      .replace(/\b(dents?|la|le|les|sur) ([1-8])[- ]([1-8])\b/gi, '$1 $2$3')
+      // « détartrage deux dents » → « détartrage des dents »
+      .replace(/\b(détartrage|polissage|brossage|nettoyage|blanchiment|hygiène|sensibilité|état|ensemble|toutes?|de|sur) deux dents\b/gi, '$1 des dents')
+      .replace(/(^|[.!?]\s+)deux dents\b(?! (?:à|a|sont|ont|présentent|\d))/g, '$1Des dents');
+  }
+
+  // Liste les numéros de dents de la dictée pour que le praticien les vérifie d'un coup d'œil.
+  function renderDentsCheck() {
+    const texte = $('#dictee').value;
+    const vus = new Map();
+    for (const m of texte.matchAll(/\b(\d{2})\b(?!\s*(?:ans|an|jours?|mois|semaines?|min|minutes?|heures?|h|mg|g|%|€|euros?))/gi)) {
+      const n = Number(m[1]);
+      if (n < 11 || n > 89 || vus.has(n)) continue;
+      vus.set(n, m.index);
+    }
+    const box = $('#dents-check');
+    box.hidden = !vus.size;
+    box.innerHTML = vus.size ? `Dents entendues : ${[...vus].map(([n, i]) => `<button type="button" data-pos="${i}"${dentValide(n) ? '' : ' class="bad" title="Ce numéro n\'existe pas en notation FDI"'}>${n}</button>`).join('')}<span>· cliquez pour corriger</span>` : '';
   }
 
   // ---------- Génération ----------
@@ -506,6 +546,7 @@
     $('#patient-nom').value = e.patient || '';
     $('#patient-ddn').value = e.ddn || '';
     $('#dictee').value = e.dictee || '';
+    renderDentsCheck();
     setDemo(Boolean(e.demo));
     state = e.state;
     display();
@@ -535,6 +576,7 @@
     $('#patient-nom').value = e.patient || '';
     $('#patient-ddn').value = e.ddn || '';
     $('#dictee').value = '';
+    renderDentsCheck();
     setSuite(e);
     $('#dictee').focus();
     setStatus('Nouvelle séance pour ce patient : dictez ce qui a été fait aujourd\'hui.');
@@ -559,6 +601,7 @@
     // place le curseur sur le premier trou à compléter
     const trou = ta.value.indexOf('___', ta.value.length - texte.length);
     if (trou >= 0) ta.setSelectionRange(trou, trou + 3);
+    renderDentsCheck();
   }
 
   // ---------- Dossier patient et envoi ----------
@@ -582,9 +625,23 @@
     $('#btn-generate').addEventListener('click', generate);
     $('#btn-example').addEventListener('click', () => {
       $('#dictee').value = window.DEMO.dictee;
+      renderDentsCheck();
       if (!$('#patient-nom').value) $('#patient-nom').value = 'M. D. (fictif)';
     });
-    $('#btn-clear').addEventListener('click', () => { $('#dictee').value = ''; setStatus(''); setSuite(null); });
+    $('#btn-clear').addEventListener('click', () => { $('#dictee').value = ''; renderDentsCheck(); setStatus(''); setSuite(null); });
+    $('#dictee').addEventListener('input', renderDentsCheck);
+    $('#dictee').addEventListener('blur', () => {
+      const ta = $('#dictee');
+      const propre = normaliserDictee(ta.value);
+      if (propre !== ta.value) { ta.value = propre; renderDentsCheck(); }
+    });
+    $('#dents-check').addEventListener('click', (e) => {
+      if (e.target.dataset.pos == null) return;
+      const ta = $('#dictee');
+      const i = Number(e.target.dataset.pos);
+      ta.focus();
+      ta.setSelectionRange(i, i + 2);
+    });
     $('#btn-suite-off').addEventListener('click', () => setSuite(null));
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('#btn-generate').disabled && !document.querySelector('dialog[open]')) {

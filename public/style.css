@@ -166,4 +166,10 @@ button.link { background: none; border: none; color: var(--accent); text-decorat
 .output-actions { margin: 0 0 14px; align-items: center; }
 .output-actions .hint { margin: 0; }
 
+/* Dents entendues dans la dictée */
+.dents-check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: .82rem; color: var(--muted); }
+.dents-check button { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); background: #fff; font-size: .82rem; }
+.dents-check button:hover { border-color: var(--accent); }
+.dents-check button.bad { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+
 @media print { .page-break { break-before: page; } }

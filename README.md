@@ -24,6 +24,7 @@ Assistant IA pour chirurgiens-dentistes : le praticien dicte sa séance, l'app r
 16. **Dossier patient en un PDF** : devis, explication, consentement, consignes et ordonnance imprimés d'un seul clic.
 17. **Envoi au patient** des consignes et de l'explication du devis par e-mail ou SMS (texte pré-rempli dans l'app de messagerie).
 18. **Raccourci Ctrl + Entrée** (⌘ + Entrée) pour générer.
+19. **Numéros de dents fiabilisés** : « vingt-six », « 20 6 » ou « 2 6 » deviennent 26, « détartrage deux dents » devient « des dents », et les dents entendues s'affichent sous la dictée (numéro FDI impossible en rouge, clic pour corriger). L'IA signale un numéro qui contredit la localisation dictée.
 
 « Mon cabinet » règle les infos du praticien (nom, adresse, RPPS, n° AM) et ses **préférences de rédaction**, transmises à l'IA à chaque génération. Tout reste dans le navigateur.
 

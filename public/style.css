@@ -148,3 +148,22 @@ dialog.wide { width: min(920px, calc(100vw - 32px)); }
 .kpi .l { font-size: .78rem; color: var(--muted); }
 #suivi-table td { vertical-align: middle; }
 #suivi-table td.num { text-align: right; white-space: nowrap; }
+
+/* Modèles de séance */
+.modeles-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.modeles-head .hint { margin: 0; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 99px; background: #fff; font-size: .82rem; }
+.chip button { border: none; background: none; padding: 5px 10px; border-radius: 99px; color: var(--ink); }
+.chip button:hover { background: var(--accent-soft); }
+.chip button.x { padding: 5px 8px 5px 0; color: var(--muted); }
+.chip.perso { border-color: var(--accent); }
+
+/* Séance de suivi */
+.suite-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: .88rem; }
+button.link { background: none; border: none; color: var(--accent); text-decoration: underline; padding: 0; }
+
+.output-actions { margin: 0 0 14px; align-items: center; }
+.output-actions .hint { margin: 0; }
+
+@media print { .page-break { break-before: page; } }

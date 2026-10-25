@@ -32,6 +32,10 @@
           <input id="patient-ddn" type="date">
         </label>
       </div>
+      <div id="suite-banner" class="suite-banner" hidden>
+        <span id="suite-text"></span>
+        <button id="btn-suite-off" class="link" type="button">Retirer</button>
+      </div>
       <div class="dictation">
         <button id="btn-mic" class="mic" type="button" aria-pressed="false">
           <span class="dot"></span><span id="mic-label">Démarrer la dictée</span>
@@ -39,11 +43,14 @@
         <button id="btn-example" class="ghost" type="button">Charger un exemple</button>
       </div>
       <p id="mic-hint" class="hint"></p>
+      <div class="modeles-head"><span class="hint">Modèles :</span><div id="modeles" class="chips"></div></div>
       <textarea id="dictee" rows="12" placeholder="Parlez ou tapez ici : motif, examen, dents concernées, actes réalisés, ce que vous proposez au patient..."></textarea>
       <div class="actions">
         <button id="btn-generate" class="primary" type="button">Générer CR et devis</button>
         <button id="btn-clear" class="ghost" type="button">Effacer</button>
+        <button id="btn-save-modele" class="ghost" type="button">Enregistrer comme modèle</button>
       </div>
+      <p class="hint">Astuce : Ctrl + Entrée (⌘ + Entrée sur Mac) pour générer.</p>
       <p id="status" class="status" role="status"></p>
     </section>
 
@@ -52,6 +59,10 @@
       <div id="empty" class="empty">Le compte-rendu, les actes CCAM, le devis et les consignes patient apparaîtront ici.</div>
       <div id="output" hidden>
         <div id="alertes" class="alertes"></div>
+        <div class="actions output-actions">
+          <button id="btn-pack" class="primary" type="button">Imprimer le dossier patient</button>
+          <span class="hint">Devis, explication, consentement, consignes et ordonnance en un seul PDF.</span>
+        </div>
         <nav class="tabs" role="tablist">
           <button role="tab" data-tab="cr" class="active" type="button">Compte-rendu</button>
           <button role="tab" data-tab="actes" type="button">Actes CCAM</button>
@@ -98,6 +109,8 @@
             <textarea id="explication" rows="10"></textarea>
             <div class="actions">
               <button id="btn-copy-explication" class="ghost" type="button">Copier</button>
+              <button class="ghost" type="button" data-email="#explication" data-subject="Votre plan de traitement">Envoyer par e-mail</button>
+              <button class="ghost" type="button" data-sms="#explication">SMS</button>
               <button id="btn-print-explication" class="primary" type="button">Imprimer / PDF</button>
             </div>
           </div>
@@ -107,6 +120,8 @@
           <textarea id="consignes" rows="10"></textarea>
           <div class="actions">
             <button id="btn-copy-consignes" class="ghost" type="button">Copier</button>
+            <button class="ghost" type="button" data-email="#consignes" data-subject="Vos consignes après la séance">Envoyer par e-mail</button>
+            <button class="ghost" type="button" data-sms="#consignes">SMS</button>
             <button id="btn-print-consignes" class="primary" type="button">Imprimer / PDF</button>
           </div>
         </div>

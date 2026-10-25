@@ -19,6 +19,11 @@ Assistant IA pour chirurgiens-dentistes : le praticien dicte sa séance, l'app r
 11. **Ordonnance** imprimable, pré-remplie avec les prescriptions dictées (en-tête RPPS et n° AM).
 12. **Consentement éclairé** pré-rempli pour les actes du devis (nature, bénéfices, risques, alternatives), à faire signer.
 13. **Suivi des devis** : statut de chaque devis (à remettre, remis, accepté, refusé), montants en attente et acceptés, taux d'acceptation, message de relance patient copié en un clic.
+14. **Modèles de séance** en un clic (détartrage, composite, extraction, urgence, contrôle) avec des « ___ » à compléter, et modèles personnels enregistrés depuis la dictée.
+15. **Séance de suivi** : depuis l'historique, « Nouvelle séance » reprend le patient et transmet le compte-rendu précédent à l'IA, qui relie la suite du traitement sans recopier d'anciens actes.
+16. **Dossier patient en un PDF** : devis, explication, consentement, consignes et ordonnance imprimés d'un seul clic.
+17. **Envoi au patient** des consignes et de l'explication du devis par e-mail ou SMS (texte pré-rempli dans l'app de messagerie).
+18. **Raccourci Ctrl + Entrée** (⌘ + Entrée) pour générer.
 
 « Mon cabinet » règle les infos du praticien (nom, adresse, RPPS, n° AM) et ses **préférences de rédaction**, transmises à l'IA à chaque génération. Tout reste dans le navigateur.
 

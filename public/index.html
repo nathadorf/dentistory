@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dentistory</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar no-print">
+    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"> Dentistory <span class="tag">V0</span></div>
+    <button id="btn-settings" class="ghost" type="button">Mon cabinet</button>
+  </header>
+
+  <div class="banner no-print">Version de démonstration : utilisez des cas fictifs ou anonymisés, sans donnée patient réelle.</div>
+  <div id="demo-banner" class="banner info no-print" hidden>Mode démo : pas de clé API configurée, le résultat affiché est un exemple pré-enregistré.</div>
+
+  <main class="layout no-print">
+    <section class="card" id="input-card">
+      <h2>1. Dictez la séance</h2>
+      <div class="row">
+        <label class="field">Patient (initiales ou nom fictif)
+          <input id="patient-nom" type="text" placeholder="M. D." autocomplete="off">
+        </label>
+        <label class="field small">Date de naissance
+          <input id="patient-ddn" type="date">
+        </label>
+      </div>
+      <div class="dictation">
+        <button id="btn-mic" class="mic" type="button" aria-pressed="false">
+          <span class="dot"></span><span id="mic-label">Démarrer la dictée</span>
+        </button>
+        <button id="btn-example" class="ghost" type="button">Charger un exemple</button>
+      </div>
+      <p id="mic-hint" class="hint"></p>
+      <textarea id="dictee" rows="12" placeholder="Parlez ou tapez ici : motif, examen, dents concernées, actes réalisés, ce que vous proposez au patient..."></textarea>
+      <div class="actions">
+        <button id="btn-generate" class="primary" type="button">Générer CR et devis</button>
+        <button id="btn-clear" class="ghost" type="button">Effacer</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <section class="card" id="output-card">
+      <h2>2. Vérifiez et éditez</h2>
+      <div id="empty" class="empty">Le compte-rendu, les actes CCAM, le devis et les consignes patient apparaîtront ici.</div>
+      <div id="output" hidden>
+        <div id="alertes" class="alertes"></div>
+        <nav class="tabs" role="tablist">
+          <button role="tab" data-tab="cr" class="active" type="button">Compte-rendu</button>
+          <button role="tab" data-tab="actes" type="button">Actes CCAM</button>
+          <button role="tab" data-tab="devis" type="button">Devis</button>
+          <button role="tab" data-tab="consignes" type="button">Consignes patient</button>
+        </nav>
+
+        <div class="tab" data-panel="cr">
+          <div id="cr-fields"></div>
+          <div class="actions"><button id="btn-copy-cr" class="primary" type="button">Copier le CR</button></div>
+        </div>
+
+        <div class="tab" data-panel="actes" hidden>
+          <p class="hint">Les actes « proposés » alimentent le devis. Vérifiez chaque code avant usage.</p>
+          <div class="table-wrap">
+            <table class="actes">
+              <thead><tr><th>Statut</th><th>Dent</th><th>Code CCAM</th><th>Panier</th><th>Honoraires (€)</th><th></th></tr></thead>
+              <tbody id="actes-body"></tbody>
+            </table>
+          </div>
+          <div class="actions"><button id="btn-add-acte" class="ghost" type="button">Ajouter un acte</button></div>
+        </div>
+
+        <div class="tab" data-panel="devis" hidden>
+          <div id="devis-preview" class="paper"></div>
+          <div class="actions"><button id="btn-print-devis" class="primary" type="button">Imprimer / PDF</button></div>
+        </div>
+
+        <div class="tab" data-panel="consignes" hidden>
+          <textarea id="consignes" rows="10"></textarea>
+          <div class="actions">
+            <button id="btn-copy-consignes" class="ghost" type="button">Copier</button>
+            <button id="btn-print-consignes" class="primary" type="button">Imprimer / PDF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Mon cabinet</h2>
+      <p class="hint">Ces informations restent dans votre navigateur et apparaissent en en-tête du devis.</p>
+      <label class="field">Nom du praticien <input name="nom" placeholder="Dr Camille Martin"></label>
+      <label class="field">Adresse du cabinet <input name="adresse" placeholder="12 rue de la Paix, 75002 Paris"></label>
+      <div class="row">
+        <label class="field">N° RPPS <input name="rpps"></label>
+        <label class="field">N° Assurance Maladie <input name="am"></label>
+      </div>
+      <label class="field">Téléphone <input name="tel"></label>
+      <div class="actions"><button class="primary" value="save">Enregistrer</button><button class="ghost" value="cancel" formnovalidate>Annuler</button></div>
+    </form>
+  </dialog>
+
+  <div id="print-area"></div>
+
+  <script src="demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

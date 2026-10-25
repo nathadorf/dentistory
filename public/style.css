@@ -15,11 +15,15 @@
   color: var(--ink);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); line-height: 1.45; }
 h2 { font-size: 1.05rem; margin: 0 0 14px; }
 
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+a.button { display: inline-block; text-decoration: none; border-radius: 8px; padding: 9px 16px; border: 1px solid var(--line); color: var(--ink); }
+a.button:hover { background: var(--bg); }
 .tag { font-size: .7rem; background: var(--accent-soft); color: var(--accent); padding: 2px 7px; border-radius: 99px; }
 
 .banner { background: var(--warn-soft); color: var(--warn); padding: 8px 20px; font-size: .88rem; }
@@ -95,7 +99,8 @@ table.actes .libelle { font-size: .78rem; color: var(--muted); margin-top: 4px; 
 .doc .small { font-size: .75rem; color: var(--muted); }
 .doc .sign { display: flex; justify-content: space-between; gap: 20px; margin-top: 30px; }
 .doc .sign div { flex: 1; border-top: 1px solid #c9d3d5; padding-top: 6px; min-height: 60px; }
-.doc .consignes-text { white-space: pre-wrap; font-size: 1rem; }
+.doc .text-doc { white-space: pre-wrap; font-size: 1rem; }
+.doc h2 { font-size: 1rem; margin: 18px 0 4px; }
 
 dialog { border: none; border-radius: var(--radius); padding: 24px; width: min(520px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(10, 20, 25, .4); }
@@ -107,3 +112,13 @@ dialog::backdrop { background: rgba(10, 20, 25, .4); }
   #print-area { display: block; padding: 0; font-size: 11pt; }
   @page { margin: 14mm; }
 }
+
+.subdoc { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.subdoc h3 { font-size: .95rem; margin: 0 0 10px; }
+#courrier { margin-top: 12px; }
+
+.history-list { list-style: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
+.history-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.history-list .hint { margin: 2px 0 0; }
+.li-actions { display: flex; gap: 4px; align-items: center; }
+@media (max-width: 600px) { .topbar { flex-wrap: wrap; gap: 8px; } .top-actions button, a.button { padding: 7px 10px; font-size: .88rem; } }

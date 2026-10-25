@@ -10,10 +10,16 @@
     ['prescriptions', 'Prescriptions'],
     ['suite', 'Suite du traitement'],
   ];
+  // Couronnes hors 100 % Santé, pour lesquelles le devis doit présenter une alternative sans reste à charge.
+  const COURONNES_HORS_100 = ['HBLD491', 'HBLD734', 'HBLD073', 'HBLD158', 'HBLD403'];
+  const HISTORY_KEY = 'dentistory.historique';
+  const HISTORY_MAX = 30;
 
   let ccam = [];
   let ccamByCode = {};
-  let state = null; // { compte_rendu, actes: [{dent, code, libelle, statut, honoraires}], consignes_patient, alertes }
+  let state = null; // { compte_rendu, actes: [{dent, code, libelle, statut, honoraires}], consignes_patient, alertes, explication, courrier }
+  let currentId = null;
+  let demoMode = false;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const eur = (n) => (Number.isFinite(n) ? n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '—');
@@ -28,6 +34,21 @@
     const el = $('#status');
     el.textContent = text;
     el.classList.toggle('error', isError);
+  }
+
+  function praticien() { return storage.get('dentistory.praticien', {}); }
+
+  async function post(url, body) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 503 && data.error === 'no_api_key') return { demo: true };
+    if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
+    return { data };
+  }
+
+  function setDemo(on) {
+    demoMode = on;
+    $('#demo-banner').hidden = !on;
   }
 
   // ---------- Dictée vocale (Web Speech API) ----------
@@ -89,22 +110,12 @@
     btn.disabled = true;
     setStatus('Rédaction en cours, quelques secondes...');
     try {
-      const r = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dictee }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.status === 503 && data.error === 'no_api_key') {
-        $('#demo-banner').hidden = false;
-        load(window.DEMO.result);
-        setStatus('Exemple pré-enregistré affiché (mode démo).');
-        return;
-      }
-      if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
-      $('#demo-banner').hidden = true;
-      load(data);
-      setStatus('Terminé. Relisez et corrigez avant usage.');
+      const { demo, data } = await post('/api/generate', { dictee, preferences: praticien().preferences });
+      setDemo(Boolean(demo));
+      currentId = Date.now().toString(36);
+      load(demo ? window.DEMO.result : data);
+      saveSession();
+      setStatus(demo ? 'Exemple pré-enregistré affiché (mode démo).' : 'Terminé. Relisez et corrigez avant usage.');
     } catch (err) {
       setStatus(err.message || 'Erreur réseau.', true);
     } finally {
@@ -115,8 +126,8 @@
   function defaultHonoraires(code) {
     const a = ccamByCode[code];
     if (!a) return 0;
-    const tarifs = storage.get('dentistory.tarifs', {});
-    if (tarifs[code] != null) return tarifs[code];
+    const tarif = storage.get('dentistory.tarifs', {})[code];
+    if (tarif != null) return a.plafond != null ? Math.min(tarif, a.plafond) : tarif;
     return a.plafond ?? (a.panier === 'libre' ? 0 : a.base);
   }
 
@@ -125,8 +136,14 @@
       compte_rendu: { ...result.compte_rendu },
       consignes_patient: result.consignes_patient || '',
       alertes: [...(result.alertes || [])],
-      actes: (result.actes || []).map((a) => ({ ...a, honoraires: defaultHonoraires(a.code) })),
+      actes: (result.actes || []).map((a) => ({ ...a, honoraires: a.honoraires ?? defaultHonoraires(a.code) })),
+      explication: result.explication || '',
+      courrier: result.courrier || '',
     };
+    display();
+  }
+
+  function display() {
     $('#empty').hidden = true;
     $('#output').hidden = false;
     renderAlertes();
@@ -134,15 +151,136 @@
     renderActes();
     renderDevis();
     $('#consignes').value = state.consignes_patient;
+    $('#explication').value = state.explication;
+    $('#explain-box').hidden = !state.explication;
+    $('#courrier').value = state.courrier;
+    $('#courrier').hidden = $('#courrier-actions').hidden = !state.courrier;
     showTab('cr');
+  }
+
+  // ---------- Documents complémentaires (explication du devis, courrier) ----------
+  function contexteSeance(extra = {}) {
+    const p = praticien();
+    return {
+      patient: $('#patient-nom').value.trim() || null,
+      praticien: { nom: p.nom || null, adresse: p.adresse || null, tel: p.tel || null },
+      compte_rendu: state.compte_rendu,
+      devis: devisLignes().map((a) => ({ dent: a.dent, code: a.code, acte: ccamByCode[a.code]?.libelle || a.libelle, panier: PANIERS[ccamByCode[a.code]?.panier] || null, ...montants(a) })),
+      alternative_100_sante: alternativeLignes()?.map((a) => ({ dent: a.dent, code: a.code, acte: ccamByCode[a.code]?.libelle, ...montants(a) })) || null,
+      ...extra,
+    };
+  }
+
+  async function writeDocument(type, extra, btn, onText) {
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Rédaction...';
+    try {
+      const { demo, data } = await post('/api/document', { type, contexte: contexteSeance(extra), preferences: praticien().preferences });
+      if (demo) setDemo(true);
+      onText(demo ? window.DEMO.documents[type] : data.texte);
+      saveSession();
+    } catch (err) {
+      setStatus(err.message || 'Erreur réseau.', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+
+  // ---------- Devis ----------
+  function montants(a) {
+    const ref = ccamByCode[a.code];
+    const base = ref?.base ?? 0;
+    const taux = ref && ref.categorie.startsWith('Prothèse') ? 0.6 : 0.7;
+    const honoraires = Number(a.honoraires) || 0;
+    const amo = Math.min(base, honoraires) * taux;
+    return { honoraires, base, amo, reste: honoraires - amo };
+  }
+
+  function alternative100(acte) {
+    const ref = ccamByCode[acte.code];
+    if (!ref || ref.panier === '100%' || ref.panier === 'soins') return null;
+    let code = null;
+    if (COURONNES_HORS_100.includes(acte.code)) {
+      // Position FDI : 1-2 incisives, 3 canine, 4 1re prémolaire, 5 2e prémolaire, 6-8 molaires.
+      const pos = Number(String(acte.dent).trim().slice(-1));
+      code = pos >= 1 && pos <= 4 ? 'HBLD634' : pos === 5 ? 'HBLD350' : 'HBLD038';
+    } else if (acte.code === 'HBLD227') {
+      code = 'HBLD033';
+    }
+    return code ? { dent: acte.dent, code, libelle: ccamByCode[code].libelle, statut: 'propose', honoraires: defaultHonoraires(code) } : null;
+  }
+
+  const devisLignes = () => state.actes.filter((a) => a.statut === 'propose');
+
+  // Plan de traitement équivalent où chaque acte hors 100 % Santé est remplacé ; null si rien à remplacer.
+  function alternativeLignes() {
+    const lignes = devisLignes();
+    const alt = lignes.map((a) => alternative100(a) || a);
+    return alt.some((a, i) => a !== lignes[i]) ? alt : null;
+  }
+
+  function tableDevis(lignes) {
+    const tot = { honoraires: 0, base: 0, amo: 0 };
+    const rows = lignes.map((a) => {
+      const ref = ccamByCode[a.code];
+      const m = montants(a);
+      tot.honoraires += m.honoraires; tot.base += m.base; tot.amo += m.amo;
+      return `<tr>
+        <td>${esc(a.dent)}</td><td>${esc(a.code)}</td><td>${esc(ref?.libelle || a.libelle)}</td>
+        <td>${ref ? PANIERS[ref.panier] : '—'}</td>
+        <td class="num">${eur(m.honoraires)}</td><td class="num">${eur(m.base)}</td><td class="num">${eur(m.amo)}</td>
+      </tr>`;
+    }).join('');
+    return { tot, html: `<table>
+      <thead><tr><th>Dent</th><th>Code CCAM</th><th>Acte et matériau</th><th>Panier</th><th class="num">Honoraires</th><th class="num">Base de remb.</th><th class="num">Remb. AMO estimé</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="num">${eur(tot.honoraires)}</td><td class="num">${eur(tot.base)}</td><td class="num">${eur(tot.amo)}</td></tr></tfoot>
+    </table>` };
+  }
+
+  function devisHTML() {
+    const p = praticien();
+    const lignes = devisLignes();
+    const nom = $('#patient-nom').value.trim() || '—';
+    const ddn = $('#patient-ddn').value ? new Date($('#patient-ddn').value).toLocaleDateString('fr-FR') : '—';
+    let corps = '<p>Aucun acte proposé. Passez un acte en « Proposé (devis) » dans l\'onglet Actes CCAM.</p>';
+    if (lignes.length) {
+      const principal = tableDevis(lignes);
+      corps = `<h2>Traitement proposé</h2>${principal.html}
+        <p><strong>Reste à charge avant complémentaire santé :</strong> ${eur(principal.tot.honoraires - principal.tot.amo)}</p>`;
+      const alt = alternativeLignes();
+      if (alt) {
+        const t = tableDevis(alt);
+        corps += `<h2>Alternative 100 % Santé</h2>
+          <p class="small">Les actes hors panier 100 % Santé sont remplacés par leur équivalent sans reste à charge pour un patient couvert par une complémentaire santé responsable.</p>
+          ${t.html}
+          <p><strong>Reste à charge avant complémentaire santé :</strong> ${eur(t.tot.honoraires - t.tot.amo)}, pris en charge par la complémentaire santé responsable pour les actes 100 % Santé.</p>`;
+      }
+    }
+    return `<div class="doc">
+      <div class="doc-head">
+        <div><strong>${esc(p.nom || 'Nom du praticien')}</strong><br>${esc(p.adresse || 'Adresse du cabinet')}<br>
+          ${p.tel ? 'Tél. ' + esc(p.tel) + '<br>' : ''}RPPS : ${esc(p.rpps || '—')} · N° AM : ${esc(p.am || '—')}</div>
+        <div><strong>Patient :</strong> ${esc(nom)}<br><strong>Né(e) le :</strong> ${esc(ddn)}<br><strong>Date du devis :</strong> ${today()}</div>
+      </div>
+      <h1>Devis pour traitement et acte bucco-dentaire</h1>
+      <p class="small">Modèle simplifié généré par Dentistory V0, à reporter sur le devis conventionnel de votre logiciel.</p>
+      ${corps}
+      <p class="small">Remboursement Assurance Maladie estimé à 70 % (soins) ou 60 % (prothèses) de la base, hors cas particuliers (ALD, C2S...). Montants indicatifs. Devis valable 6 mois.</p>
+      <div class="sign"><div>Date et signature du praticien</div><div>Date et signature du patient, précédées de « Lu et accepté »</div></div>
+    </div>`;
   }
 
   // ---------- Rendu ----------
   function renderAlertes() {
     const hors = state.actes.filter((a) => !ccamByCode[a.code]).map((a) => `Acte « ${a.libelle} » (dent ${a.dent}) hors référentiel : choisissez un code.`);
-    const libres = state.actes.filter((a) => a.statut === 'propose' && ccamByCode[a.code]?.panier === 'libre' && !a.honoraires)
+    const libres = devisLignes().filter((a) => ccamByCode[a.code]?.panier === 'libre' && !a.honoraires)
       .map((a) => `Dent ${a.dent} : ${ccamByCode[a.code].libelle} en tarif libre, saisissez vos honoraires.`);
-    const all = [...state.alertes, ...hors, ...libres];
+    const plafonds = state.actes.filter((a) => ccamByCode[a.code]?.plafond != null && a.honoraires > ccamByCode[a.code].plafond)
+      .map((a) => `Dent ${a.dent} : honoraires au-dessus du plafond de ${eur(ccamByCode[a.code].plafond)} pour ${a.code}.`);
+    const all = [...state.alertes, ...hors, ...libres, ...plafonds];
     $('#alertes').innerHTML = all.length ? `<strong>À vérifier</strong><ul>${all.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   }
 
@@ -177,55 +315,14 @@
     }).join('');
   }
 
-  function praticien() { return storage.get('dentistory.praticien', {}); }
-
-  function devisHTML() {
-    const p = praticien();
-    const lignes = state.actes.filter((a) => a.statut === 'propose');
-    let totHono = 0, totBase = 0, totAmo = 0;
-    const rows = lignes.map((a) => {
-      const ref = ccamByCode[a.code];
-      const base = ref?.base ?? 0;
-      const taux = ref && ref.categorie.startsWith('Prothèse') ? 0.6 : 0.7;
-      const amo = Math.min(base, a.honoraires) * taux;
-      totHono += Number(a.honoraires) || 0; totBase += base; totAmo += amo;
-      return `<tr>
-        <td>${esc(a.dent)}</td><td>${esc(a.code)}</td><td>${esc(ref?.libelle || a.libelle)}</td>
-        <td>${ref ? PANIERS[ref.panier] : '—'}</td>
-        <td class="num">${eur(Number(a.honoraires))}</td><td class="num">${eur(base)}</td><td class="num">${eur(amo)}</td>
-      </tr>`;
-    }).join('');
-    const nom = $('#patient-nom').value.trim() || '—';
-    const ddn = $('#patient-ddn').value ? new Date($('#patient-ddn').value).toLocaleDateString('fr-FR') : '—';
-    const alternatives = lignes.some((a) => ['modere', 'libre'].includes(ccamByCode[a.code]?.panier));
-    return `<div class="doc">
-      <div class="doc-head">
-        <div><strong>${esc(p.nom || 'Nom du praticien')}</strong><br>${esc(p.adresse || 'Adresse du cabinet')}<br>
-          ${p.tel ? 'Tél. ' + esc(p.tel) + '<br>' : ''}RPPS : ${esc(p.rpps || '—')} · N° AM : ${esc(p.am || '—')}</div>
-        <div><strong>Patient :</strong> ${esc(nom)}<br><strong>Né(e) le :</strong> ${esc(ddn)}<br><strong>Date du devis :</strong> ${today()}</div>
-      </div>
-      <h1>Devis pour traitement et acte bucco-dentaire</h1>
-      <p class="small">Modèle simplifié généré par Dentistory V0, à reporter sur le devis conventionnel de votre logiciel.</p>
-      ${lignes.length ? `<table>
-        <thead><tr><th>Dent</th><th>Code CCAM</th><th>Acte et matériau</th><th>Panier</th><th class="num">Honoraires</th><th class="num">Base de remb.</th><th class="num">Remb. AMO estimé</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="4">Total</td><td class="num">${eur(totHono)}</td><td class="num">${eur(totBase)}</td><td class="num">${eur(totAmo)}</td></tr></tfoot>
-      </table>
-      <p><strong>Reste à charge avant complémentaire santé :</strong> ${eur(totHono - totAmo)}</p>
-      ${alternatives ? '<p>Une alternative thérapeutique sans reste à charge (panier 100 % Santé) ou à tarif maîtrisé a été proposée au patient.</p>' : ''}`
-      : '<p>Aucun acte proposé. Passez un acte en « Proposé (devis) » dans l\'onglet Actes CCAM.</p>'}
-      <p class="small">Remboursement Assurance Maladie estimé à 70 % (soins) ou 60 % (prothèses) de la base, hors cas particuliers (ALD, C2S...). Montants indicatifs. Devis valable 6 mois.</p>
-      <div class="sign"><div>Date et signature du praticien</div><div>Date et signature du patient, précédées de « Lu et accepté »</div></div>
-    </div>`;
-  }
-
   function renderDevis() { $('#devis-preview').innerHTML = devisHTML(); }
 
-  function consignesHTML() {
+  function headerDoc() {
     const p = praticien();
-    return `<div class="doc"><div class="doc-head"><div><strong>${esc(p.nom || 'Votre dentiste')}</strong><br>${esc(p.adresse || '')}${p.tel ? '<br>Tél. ' + esc(p.tel) : ''}</div><div>${today()}</div></div>
-      <h1>Vos consignes après la séance</h1><div class="consignes-text">${esc($('#consignes').value)}</div></div>`;
+    return `<div class="doc-head"><div><strong>${esc(p.nom || 'Votre dentiste')}</strong><br>${esc(p.adresse || '')}${p.tel ? '<br>Tél. ' + esc(p.tel) : ''}</div><div>${today()}</div></div>`;
   }
+
+  const texteHTML = (titre, texte) => `<div class="doc">${headerDoc()}${titre ? `<h1>${esc(titre)}</h1>` : ''}<div class="text-doc">${esc(texte)}</div></div>`;
 
   function printDoc(html) {
     $('#print-area').innerHTML = html;
@@ -257,6 +354,45 @@
     if (name === 'devis') renderDevis();
   }
 
+  // ---------- Historique (navigateur uniquement) ----------
+  function saveSession() {
+    if (!state || !currentId) return;
+    const list = storage.get(HISTORY_KEY, []).filter((e) => e.id !== currentId);
+    list.unshift({
+      id: currentId,
+      date: new Date().toISOString(),
+      patient: $('#patient-nom').value.trim(),
+      ddn: $('#patient-ddn').value,
+      dictee: $('#dictee').value,
+      demo: demoMode,
+      state,
+    });
+    storage.set(HISTORY_KEY, list.slice(0, HISTORY_MAX));
+  }
+
+  function renderHistory() {
+    const list = storage.get(HISTORY_KEY, []);
+    $('#history-list').innerHTML = list.length ? list.map((e) => `
+      <li>
+        <div><strong>${esc(e.patient || 'Patient sans nom')}</strong> · ${new Date(e.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${e.demo ? ' · démo' : ''}
+          <div class="hint">${esc(e.state?.compte_rendu?.motif || '')}</div></div>
+        <div class="li-actions"><button class="ghost" type="button" data-open="${e.id}">Ouvrir</button><button class="del" type="button" title="Supprimer" data-remove="${e.id}">✕</button></div>
+      </li>`).join('') : '<li class="hint">Aucune séance pour l\'instant.</li>';
+  }
+
+  function openSession(id) {
+    const e = storage.get(HISTORY_KEY, []).find((x) => x.id === id);
+    if (!e) return;
+    currentId = e.id;
+    $('#patient-nom').value = e.patient || '';
+    $('#patient-ddn').value = e.ddn || '';
+    $('#dictee').value = e.dictee || '';
+    setDemo(Boolean(e.demo));
+    state = e.state;
+    display();
+    setStatus('Séance rouverte depuis l\'historique.');
+  }
+
   // ---------- Événements ----------
   function bind() {
     $('#btn-generate').addEventListener('click', generate);
@@ -267,8 +403,10 @@
     $('#btn-clear').addEventListener('click', () => { $('#dictee').value = ''; setStatus(''); });
     document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
-    $('#cr-fields').addEventListener('input', (e) => { if (e.target.dataset.key) state.compte_rendu[e.target.dataset.key] = e.target.value; });
-    $('#consignes').addEventListener('input', (e) => { state.consignes_patient = e.target.value; });
+    $('#cr-fields').addEventListener('input', (e) => { if (e.target.dataset.key) { state.compte_rendu[e.target.dataset.key] = e.target.value; saveSession(); } });
+    $('#consignes').addEventListener('input', (e) => { state.consignes_patient = e.target.value; saveSession(); });
+    $('#explication').addEventListener('input', (e) => { state.explication = e.target.value; saveSession(); });
+    $('#courrier').addEventListener('input', (e) => { state.courrier = e.target.value; saveSession(); });
 
     $('#actes-body').addEventListener('change', (e) => {
       const tr = e.target.closest('tr');
@@ -286,42 +424,91 @@
       }
       renderActes();
       renderAlertes();
+      saveSession();
     });
     $('#actes-body').addEventListener('click', (e) => {
       if (e.target.dataset.del == null) return;
       state.actes.splice(Number(e.target.dataset.del), 1);
       renderActes();
       renderAlertes();
+      saveSession();
     });
     $('#btn-add-acte').addEventListener('click', () => {
       const code = ccam[0].code;
       state.actes.push({ dent: '', code, libelle: ccamByCode[code].libelle, statut: 'propose', honoraires: defaultHonoraires(code) });
       renderActes();
+      saveSession();
     });
 
     $('#btn-copy-cr').addEventListener('click', (e) => copy(crText(), e.target));
     $('#btn-copy-consignes').addEventListener('click', (e) => copy($('#consignes').value, e.target));
     $('#btn-print-devis').addEventListener('click', () => printDoc(devisHTML()));
-    $('#btn-print-consignes').addEventListener('click', () => printDoc(consignesHTML()));
+    $('#btn-print-consignes').addEventListener('click', () => printDoc(texteHTML('Vos consignes après la séance', $('#consignes').value)));
 
-    const dialog = $('#settings');
+    $('#btn-explain').addEventListener('click', (e) => {
+      if (!devisLignes().length) return setStatus('Aucun acte proposé à expliquer.', true);
+      writeDocument('explication', {}, e.target, (texte) => {
+        state.explication = texte;
+        $('#explication').value = texte;
+        $('#explain-box').hidden = false;
+      });
+    });
+    $('#btn-copy-explication').addEventListener('click', (e) => copy($('#explication').value, e.target));
+    $('#btn-print-explication').addEventListener('click', () => printDoc(texteHTML('Votre plan de traitement expliqué', $('#explication').value)));
+
+    $('#btn-letter').addEventListener('click', (e) => {
+      const destinataire = { specialite: $('#courrier-spe').value, nom: $('#courrier-nom').value.trim() || null };
+      writeDocument('courrier', { destinataire, demande: $('#courrier-demande').value.trim() || null }, e.target, (texte) => {
+        state.courrier = texte;
+        $('#courrier').value = texte;
+        $('#courrier').hidden = $('#courrier-actions').hidden = false;
+      });
+    });
+    $('#btn-copy-courrier').addEventListener('click', (e) => copy($('#courrier').value, e.target));
+    $('#btn-print-courrier').addEventListener('click', () => printDoc(texteHTML('', $('#courrier').value)));
+
+    const settings = $('#settings');
+    const settingsFields = () => settings.querySelectorAll('input, textarea');
     $('#btn-settings').addEventListener('click', () => {
       const p = praticien();
-      for (const el of dialog.querySelectorAll('input')) el.value = p[el.name] || '';
-      dialog.showModal();
+      for (const el of settingsFields()) el.value = p[el.name] || '';
+      settings.showModal();
     });
-    dialog.addEventListener('close', () => {
-      if (dialog.returnValue !== 'save') return;
+    settings.addEventListener('close', () => {
+      if (settings.returnValue !== 'save') return;
       const p = {};
-      for (const el of dialog.querySelectorAll('input')) p[el.name] = el.value.trim();
+      for (const el of settingsFields()) p[el.name] = el.value.trim();
       storage.set('dentistory.praticien', p);
       if (state) renderDevis();
     });
+
+    const history = $('#history');
+    $('#btn-history').addEventListener('click', () => { renderHistory(); history.showModal(); });
+    $('#btn-history-close').addEventListener('click', () => history.close());
+    $('#history-list').addEventListener('click', (e) => {
+      if (e.target.dataset.open) { openSession(e.target.dataset.open); history.close(); }
+      if (e.target.dataset.remove) {
+        storage.set(HISTORY_KEY, storage.get(HISTORY_KEY, []).filter((x) => x.id !== e.target.dataset.remove));
+        renderHistory();
+      }
+    });
+  }
+
+  async function setupFeedback() {
+    try {
+      const { feedbackEmail } = await (await fetch('/api/config')).json();
+      if (!feedbackEmail) return;
+      const body = "Ce qui m'a fait gagner du temps :\n\n\nCe qui est faux ou manque :\n\n\nCe que je voudrais en plus :\n\n\nCombien je paierais par mois :\n";
+      const a = $('#btn-feedback');
+      a.href = `mailto:${feedbackEmail}?subject=${encodeURIComponent('Avis sur Dentistory V0')}&body=${encodeURIComponent(body)}`;
+      a.hidden = false;
+    } catch { /* bouton laissé masqué */ }
   }
 
   async function init() {
     bind();
     setupMic();
+    setupFeedback();
     try {
       ccam = await (await fetch('/api/ccam')).json();
       ccamByCode = Object.fromEntries(ccam.map((a) => [a.code, a]));

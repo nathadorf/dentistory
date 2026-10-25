@@ -10,7 +10,11 @@
 <body>
   <header class="topbar no-print">
     <div class="brand"><img src="icon.svg" alt="" width="28" height="28"> Dentistory <span class="tag">V0</span></div>
-    <button id="btn-settings" class="ghost" type="button">Mon cabinet</button>
+    <div class="top-actions">
+      <a id="btn-feedback" class="ghost button" href="#" hidden>Donner mon avis</a>
+      <button id="btn-history" class="ghost" type="button">Historique</button>
+      <button id="btn-settings" class="ghost" type="button">Mon cabinet</button>
+    </div>
   </header>
 
   <div class="banner no-print">Version de démonstration : utilisez des cas fictifs ou anonymisés, sans donnée patient réelle.</div>
@@ -52,6 +56,7 @@
           <button role="tab" data-tab="actes" type="button">Actes CCAM</button>
           <button role="tab" data-tab="devis" type="button">Devis</button>
           <button role="tab" data-tab="consignes" type="button">Consignes patient</button>
+          <button role="tab" data-tab="courrier" type="button">Courrier confrère</button>
         </nav>
 
         <div class="tab" data-panel="cr">
@@ -72,7 +77,18 @@
 
         <div class="tab" data-panel="devis" hidden>
           <div id="devis-preview" class="paper"></div>
-          <div class="actions"><button id="btn-print-devis" class="primary" type="button">Imprimer / PDF</button></div>
+          <div class="actions">
+            <button id="btn-print-devis" class="primary" type="button">Imprimer / PDF</button>
+            <button id="btn-explain" class="ghost" type="button">Expliquer le devis au patient</button>
+          </div>
+          <div id="explain-box" class="subdoc" hidden>
+            <h3>Le devis expliqué au patient</h3>
+            <textarea id="explication" rows="10"></textarea>
+            <div class="actions">
+              <button id="btn-copy-explication" class="ghost" type="button">Copier</button>
+              <button id="btn-print-explication" class="primary" type="button">Imprimer / PDF</button>
+            </div>
+          </div>
         </div>
 
         <div class="tab" data-panel="consignes" hidden>
@@ -80,6 +96,34 @@
           <div class="actions">
             <button id="btn-copy-consignes" class="ghost" type="button">Copier</button>
             <button id="btn-print-consignes" class="primary" type="button">Imprimer / PDF</button>
+          </div>
+        </div>
+
+        <div class="tab" data-panel="courrier" hidden>
+          <div class="row">
+            <label class="field">Destinataire
+              <select id="courrier-spe">
+                <option>Chirurgien oral</option>
+                <option>Parodontiste</option>
+                <option>Orthodontiste</option>
+                <option>Endodontiste</option>
+                <option>Implantologue</option>
+                <option>Radiologue (cone beam)</option>
+                <option>Médecin traitant</option>
+              </select>
+            </label>
+            <label class="field">Nom du confrère (facultatif)
+              <input id="courrier-nom" type="text" placeholder="Dr Durand">
+            </label>
+          </div>
+          <label class="field">Votre demande
+            <input id="courrier-demande" type="text" placeholder="Avis et prise en charge pour avulsion de la 38">
+          </label>
+          <div class="actions"><button id="btn-letter" class="primary" type="button">Rédiger le courrier</button></div>
+          <textarea id="courrier" rows="14" placeholder="Le courrier apparaîtra ici." hidden></textarea>
+          <div id="courrier-actions" class="actions" hidden>
+            <button id="btn-copy-courrier" class="ghost" type="button">Copier</button>
+            <button id="btn-print-courrier" class="primary" type="button">Imprimer / PDF</button>
           </div>
         </div>
       </div>
@@ -97,8 +141,18 @@
         <label class="field">N° Assurance Maladie <input name="am"></label>
       </div>
       <label class="field">Téléphone <input name="tel"></label>
+      <label class="field">Mes préférences de rédaction
+        <textarea name="preferences" rows="4" placeholder="Ex. : style télégraphique ; toujours noter l'anesthésie utilisée ; je propose toujours la zircone en première intention."></textarea>
+      </label>
       <div class="actions"><button class="primary" value="save">Enregistrer</button><button class="ghost" value="cancel" formnovalidate>Annuler</button></div>
     </form>
+  </dialog>
+
+  <dialog id="history">
+    <h2>Historique des séances</h2>
+    <p class="hint">Les séances sont gardées dans ce navigateur uniquement (30 dernières).</p>
+    <ul id="history-list" class="history-list"></ul>
+    <div class="actions"><button id="btn-history-close" class="ghost" type="button">Fermer</button></div>
   </dialog>
 
   <div id="print-area"></div>

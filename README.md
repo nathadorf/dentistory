@@ -18,7 +18,7 @@ Assistant IA pour chirurgiens-dentistes : le praticien dicte sa séance, l'app r
 
 « Mon cabinet » règle les infos du praticien (nom, adresse, RPPS, n° AM) et ses **préférences de rédaction**, transmises à l'IA à chaque génération. Tout reste dans le navigateur.
 
-Si la variable `FEEDBACK_EMAIL` est définie, un bouton « Donner mon avis » ouvre un e-mail pré-rempli pour les testeurs.
+Le bouton « Donner mon avis » ouvre un e-mail pré-rempli pour les testeurs, adressé à nmajersdorf@gmail.com (modifiable avec la variable `FEEDBACK_EMAIL`).
 
 ## Lancer en local
 

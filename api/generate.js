@@ -36,10 +36,18 @@ Produis :
 - consignes_patient : consignes post-séance à remettre au patient, en langage simple, vouvoiement, 3 à 6 points.
 - alertes : ce que le praticien doit vérifier (information manquante, ambiguïté sur une dent, choix de matériau non précisé, allergie mentionnée...).
 
+Si une séance précédente est fournie, c'est le contexte du même patient : sers-t'en pour compléter les antécédents et relier la suite du traitement, mais ne recopie pas comme réalisés des actes qui ne sont pas dans la dictée du jour.
+
 N'invente aucun fait clinique absent de la dictée. Tu ne poses pas de diagnostic à la place du praticien : tu reformules ce qu'il dit.
 
 Référentiel CCAM (code | libellé | panier) :
 ${referentiel}`;
+
+// Résumé de la séance précédente du même patient, envoyé par le front pour une séance de suivi.
+function precedentBlock(precedent) {
+  if (!precedent || typeof precedent !== 'object') return '';
+  return `Séance précédente du même patient (contexte, JSON) :\n${JSON.stringify(precedent).slice(0, 8000)}\n\n`;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Méthode non autorisée' });
@@ -57,7 +65,7 @@ export default async function handler(req, res) {
       max_tokens: 16000,
       output_config: { effort: 'low', format: zodOutputFormat(Result) },
       system: SYSTEM,
-      messages: [{ role: 'user', content: `Dictée de la séance :\n\n${dictee}${preferencesBlock(body.preferences)}` }],
+      messages: [{ role: 'user', content: `${precedentBlock(body.precedent)}Dictée de la séance :\n\n${dictee}${preferencesBlock(body.preferences)}` }],
     });
     if (response.stop_reason === 'refusal') return send(res, 422, { error: "L'IA a refusé de traiter cette dictée." });
     if (!response.parsed_output) return send(res, 502, { error: 'Réponse incomplète, réessayez.' });

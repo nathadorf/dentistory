@@ -21,11 +21,22 @@
     [[48, 47, 46, 45, 44, 43, 42, 41], [31, 32, 33, 34, 35, 36, 37, 38]],
   ];
 
+  const MODELES_KEY = 'dentistory.modeles';
+  // Trames de dictée courantes : le praticien complète les « ___ » au lieu de tout redire.
+  const MODELES_DEFAUT = [
+    ['Détartrage', "Détartrage et polissage des deux arcades. Hygiène ___. Conseils de brossage donnés. Prochain contrôle dans 6 mois."],
+    ['Composite', "Carie sur la ___ face ___. Anesthésie para-apicale. Curetage, restauration composite ___ face(s). Réglage de l'occlusion."],
+    ['Extraction', "Extraction de la ___ sous anesthésie locale, sans alvéolectomie. Hémostase par compression. Consignes post-opératoires données. Prescription : ___."],
+    ['Urgence douleur', "Patient vu en urgence pour douleur sur la ___ depuis ___. Test au froid ___, percussion ___. Radio rétro-alvéolaire : ___. Diagnostic : ___. Traitement réalisé : ___."],
+    ['Contrôle', "Consultation de contrôle. Pas de doléance. Examen clinique : ___. Radiographies : ___. Soins à prévoir : ___."],
+  ];
+
   let ccam = [];
   let ccamByCode = {};
   let state = null; // { compte_rendu, actes: [{dent, code, libelle, statut, honoraires}], consignes_patient, alertes, explication, courrier }
   let currentId = null;
   let demoMode = false;
+  let suiteDe = null; // séance précédente du même patient, envoyée comme contexte à la génération
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const eur = (n) => (Number.isFinite(n) ? n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '—');
@@ -116,11 +127,12 @@
     btn.disabled = true;
     setStatus('Rédaction en cours, quelques secondes...');
     try {
-      const { demo, data } = await post('/api/generate', { dictee, preferences: praticien().preferences });
+      const { demo, data } = await post('/api/generate', { dictee, preferences: praticien().preferences, precedent: precedent() });
       setDemo(Boolean(demo));
       currentId = Date.now().toString(36);
       load(demo ? window.DEMO.result : data);
       saveSession();
+      setSuite(null);
       setStatus(demo ? 'Exemple pré-enregistré affiché (mode démo).' : 'Terminé. Relisez et corrigez avant usage.');
     } catch (err) {
       setStatus(err.message || 'Erreur réseau.', true);
@@ -483,7 +495,7 @@
       <li>
         <div><strong>${esc(e.patient || 'Patient sans nom')}</strong> · ${new Date(e.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${e.demo ? ' · démo' : ''}
           <div class="hint">${esc(e.state?.compte_rendu?.motif || '')}</div></div>
-        <div class="li-actions"><button class="ghost" type="button" data-open="${e.id}">Ouvrir</button><button class="del" type="button" title="Supprimer" data-remove="${e.id}">✕</button></div>
+        <div class="li-actions"><button class="ghost" type="button" data-open="${e.id}">Ouvrir</button><button class="ghost" type="button" data-suite="${e.id}" title="Nouvelle séance pour ce patient, avec le contexte de celle-ci">Nouvelle séance</button><button class="del" type="button" title="Supprimer" data-remove="${e.id}">✕</button></div>
       </li>`).join('') : '<li class="hint">Aucune séance pour l\'instant.</li>';
   }
 
@@ -500,6 +512,71 @@
     setStatus('Séance rouverte depuis l\'historique.');
   }
 
+  // ---------- Séance de suivi ----------
+  function precedent() {
+    if (!suiteDe?.state) return null;
+    const st = suiteDe.state;
+    return {
+      date: new Date(suiteDe.date).toLocaleDateString('fr-FR'),
+      compte_rendu: st.compte_rendu,
+      actes: (st.actes || []).map((a) => ({ dent: a.dent, code: a.code, libelle: ccamByCode[a.code]?.libelle || a.libelle, statut: a.statut })),
+    };
+  }
+
+  function setSuite(entry) {
+    suiteDe = entry;
+    $('#suite-banner').hidden = !entry;
+    if (entry) $('#suite-text').textContent = `Suite de la séance du ${new Date(entry.date).toLocaleDateString('fr-FR')} : le compte-rendu reprendra son contexte.`;
+  }
+
+  function nouvelleSeance(id) {
+    const e = storage.get(HISTORY_KEY, []).find((x) => x.id === id);
+    if (!e) return;
+    $('#patient-nom').value = e.patient || '';
+    $('#patient-ddn').value = e.ddn || '';
+    $('#dictee').value = '';
+    setSuite(e);
+    $('#dictee').focus();
+    setStatus('Nouvelle séance pour ce patient : dictez ce qui a été fait aujourd\'hui.');
+  }
+
+  // ---------- Modèles de séance ----------
+  function modeles() {
+    return [
+      ...MODELES_DEFAUT.map(([nom, texte]) => ({ nom, texte })),
+      ...storage.get(MODELES_KEY, []).map((m) => ({ ...m, perso: true })),
+    ];
+  }
+
+  function renderModeles() {
+    $('#modeles').innerHTML = modeles().map((m, i) => `<span class="chip${m.perso ? ' perso' : ''}"><button type="button" data-modele="${i}" title="${esc(m.texte)}">${esc(m.nom)}</button>${m.perso ? `<button type="button" class="x" data-del-modele="${esc(m.nom)}" title="Supprimer ce modèle">✕</button>` : ''}</span>`).join('');
+  }
+
+  function insererModele(texte) {
+    const ta = $('#dictee');
+    ta.value = ta.value.trim() ? `${ta.value.trimEnd()}\n${texte}` : texte;
+    ta.focus();
+    // place le curseur sur le premier trou à compléter
+    const trou = ta.value.indexOf('___', ta.value.length - texte.length);
+    if (trou >= 0) ta.setSelectionRange(trou, trou + 3);
+  }
+
+  // ---------- Dossier patient et envoi ----------
+  function dossierHTML() {
+    const pages = [];
+    if (devisLignes().length) pages.push(devisHTML());
+    if ($('#explication').value.trim()) pages.push(texteHTML('Votre plan de traitement expliqué', $('#explication').value));
+    if ($('#consentement').value.trim()) pages.push(consentementHTML());
+    if ($('#consignes').value.trim()) pages.push(texteHTML('Vos consignes après la séance', $('#consignes').value));
+    if ($('#ordonnance').value.trim()) pages.push(ordonnanceHTML());
+    return pages.map((html, i) => `<div${i ? ' class="page-break"' : ''}>${html}</div>`).join('');
+  }
+
+  function signature() {
+    const p = praticien();
+    return `\n\n${p.nom || 'Le cabinet'}${p.tel ? '\n' + p.tel : ''}`;
+  }
+
   // ---------- Événements ----------
   function bind() {
     $('#btn-generate').addEventListener('click', generate);
@@ -507,7 +584,49 @@
       $('#dictee').value = window.DEMO.dictee;
       if (!$('#patient-nom').value) $('#patient-nom').value = 'M. D. (fictif)';
     });
-    $('#btn-clear').addEventListener('click', () => { $('#dictee').value = ''; setStatus(''); });
+    $('#btn-clear').addEventListener('click', () => { $('#dictee').value = ''; setStatus(''); setSuite(null); });
+    $('#btn-suite-off').addEventListener('click', () => setSuite(null));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('#btn-generate').disabled && !document.querySelector('dialog[open]')) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    $('#modeles').addEventListener('click', (e) => {
+      if (e.target.dataset.modele != null) insererModele(modeles()[Number(e.target.dataset.modele)].texte);
+      if (e.target.dataset.delModele != null) {
+        storage.set(MODELES_KEY, storage.get(MODELES_KEY, []).filter((m) => m.nom !== e.target.dataset.delModele));
+        renderModeles();
+      }
+    });
+    $('#btn-save-modele').addEventListener('click', () => {
+      const texte = $('#dictee').value.trim();
+      if (texte.length < 10) return setStatus('Tapez ou dictez d\'abord le texte du modèle (vous pouvez laisser des « ___ » à compléter).', true);
+      const nom = (window.prompt('Nom du modèle (ex. : Endo molaire)') || '').trim();
+      if (!nom) return;
+      const perso = storage.get(MODELES_KEY, []).filter((m) => m.nom !== nom);
+      perso.push({ nom, texte });
+      storage.set(MODELES_KEY, perso);
+      renderModeles();
+      setStatus(`Modèle « ${nom} » enregistré.`);
+    });
+
+    $('#btn-pack').addEventListener('click', () => {
+      const html = dossierHTML();
+      if (!html) return setStatus('Rien à imprimer pour l\'instant.', true);
+      printDoc(html);
+    });
+    $('#output').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-email], [data-sms]');
+      if (!b) return;
+      const texte = $(b.dataset.email || b.dataset.sms).value.trim();
+      if (!texte) return setStatus('Le texte est vide.', true);
+      const body = encodeURIComponent(texte + signature());
+      window.location.href = b.dataset.email
+        ? `mailto:?subject=${encodeURIComponent(b.dataset.subject || '')}&body=${body}`
+        : `sms:?&body=${body}`;
+    });
     document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
     $('#cr-fields').addEventListener('input', (e) => { if (e.target.dataset.key) { state.compte_rendu[e.target.dataset.key] = e.target.value; saveSession(); } });
@@ -626,7 +745,8 @@
     $('#btn-history').addEventListener('click', () => { renderHistory(); history.showModal(); });
     $('#btn-history-close').addEventListener('click', () => history.close());
     $('#history-list').addEventListener('click', (e) => {
-      if (e.target.dataset.open) { openSession(e.target.dataset.open); history.close(); }
+      if (e.target.dataset.open) { openSession(e.target.dataset.open); setSuite(null); history.close(); }
+      if (e.target.dataset.suite) { nouvelleSeance(e.target.dataset.suite); history.close(); }
       if (e.target.dataset.remove) {
         storage.set(HISTORY_KEY, storage.get(HISTORY_KEY, []).filter((x) => x.id !== e.target.dataset.remove));
         renderHistory();
@@ -647,6 +767,7 @@
 
   async function init() {
     bind();
+    renderModeles();
     setupMic();
     setupFeedback();
     try {

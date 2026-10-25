@@ -19,7 +19,7 @@
   </header>
 
   <div class="banner no-print">Version de démonstration : utilisez des cas fictifs ou anonymisés, sans donnée patient réelle.</div>
-  <div id="demo-banner" class="banner info no-print" hidden>Mode démo : pas de clé API configurée, le résultat affiché est un exemple pré-enregistré.</div>
+  <div id="demo-banner" class="banner demo no-print" hidden><strong>Mode démo : l'IA n'est pas branchée sur ce site.</strong> Votre dictée n'est pas analysée, « Générer » affiche toujours le même exemple (dents 36 et 46). Pour l'activer, ajoutez <code>ANTHROPIC_API_KEY</code> dans Vercel (environnement Production) puis redéployez.<span id="demo-diag"></span></div>
 
   <main class="layout no-print">
     <section class="card" id="input-card">
@@ -59,6 +59,9 @@
       <h2>2. Vérifiez et éditez</h2>
       <div id="empty" class="empty">Le compte-rendu, les actes CCAM, le devis et les consignes patient apparaîtront ici.</div>
       <div id="output" hidden>
+        <div id="demo-result" class="demo-result" hidden>
+          <strong>Ce résultat n'est pas votre dictée.</strong> Sans clé API, l'app affiche un exemple pré-enregistré (patient fictif, dents 36 et 46), quelle que soit la dictée.
+        </div>
         <div id="alertes" class="alertes"></div>
         <div class="actions output-actions">
           <button id="btn-pack" class="primary" type="button">Imprimer le dossier patient</button>
